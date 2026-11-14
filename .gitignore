@@ -1,0 +1,33 @@
+
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+build/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Firebase credentials
+serviceAccountKey.json
+*firebase-adminsdk*.json
+*service-account*.json
+
+# Firebase local files
+.firebase/
+firebase-debug.log
+
+# Vercel
+.vercel/
+
+# Logs
+*.log
+npm-debug.log*
+
+# System files
+.DS_Store
+Thumbs.db

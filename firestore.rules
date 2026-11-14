@@ -1,0 +1,53 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function profile() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function active() { return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && profile().active == true; }
+    function sameFacility(facilityId) { return active() && profile().facilityId == facilityId; }
+    function hasRole(allowed) { return active() && profile().role in allowed; }
+
+    match /users/{uid} {
+      allow read: if active() && (request.auth.uid == uid || profile().role == 'regional_admin');
+      allow write: if false; // Provision users via trusted admin script only.
+    }
+    match /facilities/{id} {
+      allow read: if active();
+      allow write: if false;
+    }
+    // All inventory mutations use authenticated server APIs with audit trails.
+    match /medicines/{id} { allow read: if active(); allow write: if false; }
+    match /equipment/{id} { allow read: if active(); allow write: if false; }
+    match /resourceRequests/{id} {
+      allow read: if active() && (profile().role == 'regional_admin'
+        || profile().facilityId == resource.data.fromFacilityId
+        || profile().facilityId == resource.data.toFacilityId);
+      allow write: if false; // API routes use trusted Firebase Admin SDK.
+    }
+match /notifications/{id} {
+  allow read: if active()
+    && resource.data.recipientUid == request.auth.uid;
+
+  allow update: if active()
+    && resource.data.recipientUid == request.auth.uid
+    && request.resource.data.diff(resource.data)
+      .affectedKeys().hasOnly(['isRead', 'readAt'])
+    && request.resource.data.isRead == true;
+
+  allow create, delete: if false;
+}
+    match /auditLogs/{id} {
+      allow read: if hasRole(['regional_admin']);
+      allow write: if false;
+    }
+    match /maintenanceRecords/{id} {
+      allow read: if active() && (profile().role == 'regional_admin' || profile().facilityId == resource.data.facilityId);
+      allow write: if false;
+    }
+    match /inventoryMovements/{id} {
+      allow read: if active() && (profile().role == 'regional_admin' || profile().facilityId == resource.data.facilityId);
+      allow write: if false;
+    }
+    match /{document=**} { allow read, write: if false; }
+  }
+}
